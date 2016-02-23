@@ -8,6 +8,7 @@ import org.apache.commons.dbcp2.BasicDataSource;
 import core.PersistentContext;
 import core.PersistentContextFactory;
 import exceptions.NotValidPersistentClassException;
+import exceptions.UnsupportedDataMappingException;
 
 public class ExampleApp {
 
@@ -32,6 +33,9 @@ public class ExampleApp {
 			e.printStackTrace();
 		} catch (SQLException e) {
 			// TODO 
+			e.printStackTrace();
+		} catch (UnsupportedDataMappingException e) {
+			// TODO
 			e.printStackTrace();
 		}
 	}

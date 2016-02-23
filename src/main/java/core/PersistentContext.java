@@ -14,13 +14,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import javax.sql.DataSource;
-
 import annotations.ColumnMap;
 import annotations.PersistentClass;
 import exceptions.NotValidPersistentClassException;
+import exceptions.UnsupportedDataMappingException;
 
 
 public class PersistentContext<T>  {
@@ -39,13 +38,10 @@ public class PersistentContext<T>  {
 	 * @throws NotValidPersistentClassException If the class is not annotated as PersistentClass.
 	 * @throws SQLException
 	 */
-	public void insert(T t) throws NotValidPersistentClassException, SQLException{
-
-		//TODO: SQLExceptions should be thrown to the caller?
-		//Instead this method it can return true or false if the insert succeeded or not.
+	public void insert(T t) throws NotValidPersistentClassException, SQLException, UnsupportedDataMappingException{
 
 		Class<?> c = t.getClass();
-		
+
 		if(!c.isAnnotationPresent(PersistentClass.class)){
 			throw new NotValidPersistentClassException("The object must be an instance of a class annotated with @RgsPersistentCLass");
 		}
@@ -56,9 +52,12 @@ public class PersistentContext<T>  {
 
 		PreparedStatement stmt = null;
 
-		try {
-			stmt = generateInsertPrepareStatement(table.table(), fields, t, true);
-			stmt.executeUpdate();
+		try(Connection connection = this.dataSource.getConnection()){
+
+			stmt = generateInsertPrepareStatement(table.table(), fields, t, true, connection);
+			if(stmt != null)
+				stmt.executeUpdate();
+
 		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			//TODO 
 			e.printStackTrace();
@@ -74,11 +73,10 @@ public class PersistentContext<T>  {
 	 * @throws NotValidPersistentClassException
 	 * @throws SQLException
 	 */
-	public long insertAndReturnId(T t) throws NotValidPersistentClassException, SQLException{
+	public long insertAndReturnId(T t) throws NotValidPersistentClassException, SQLException, UnsupportedDataMappingException{
 
 		//TODO: Test behavior on missing auto generated key.
-		//TODO: Review Implementation.
-		
+
 		Class<? extends Object> c = t.getClass();
 		if(!c.isAnnotationPresent(PersistentClass.class)){
 			throw new NotValidPersistentClassException("The object must be an instance of a class annotated with @RgsPersistentCLass");
@@ -87,28 +85,25 @@ public class PersistentContext<T>  {
 		Annotation annotation = c.getAnnotation(PersistentClass.class);
 		PersistentClass table = (PersistentClass) annotation;
 		Field[] fields = c.getDeclaredFields();
-		PreparedStatement stmt = null;
-		
 		long result = 0;
-		
-		try {
-			stmt = generateInsertPrepareStatement(table.table(), fields, t, true);
-			ResultSet rs;
 
+		try(Connection connection = this.dataSource.getConnection();
+				PreparedStatement stmt = generateInsertPrepareStatement(table.table(), fields, t, true, connection)){
+
+			ResultSet rs;
 			stmt.executeUpdate();
 			rs = stmt.getGeneratedKeys();
 
 			if (rs != null && rs.next()) {
 				result = rs.getLong(1);
-			}
+				rs.close();
+			}	
 
-			stmt.close();
-			stmt.getConnection().close();
 		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			//TODO 
 			e.printStackTrace();
 		}
-		
+
 		return result;
 	}
 
@@ -116,10 +111,8 @@ public class PersistentContext<T>  {
 	/*
 	 * Private aux method for generating the PreparedStatement object.
 	 */
-	private PreparedStatement generateInsertPrepareStatement(String tableName, Field[] fields, T t, boolean generatedKeyReturn) throws SQLException, 
-	IllegalAccessException, IllegalArgumentException, InvocationTargetException{
-		
-		//TODO: Review Implementation.
+	private PreparedStatement generateInsertPrepareStatement(String tableName, Field[] fields, T t, boolean generatedKeyReturn, Connection connection) throws SQLException, 
+	IllegalAccessException, IllegalArgumentException, InvocationTargetException, UnsupportedDataMappingException{
 
 		String sql_insert_front = "INSERT INTO " + tableName + " (";
 		String sql_values = ") VALUES (";
@@ -159,23 +152,20 @@ public class PersistentContext<T>  {
 
 		String sql_query = sql_insert_front + sql_values + sql_end;
 		PreparedStatement stmt = null;
-
-		Connection connection = this.dataSource.getConnection();
 		if(generatedKeyReturn){
 			stmt = connection.prepareStatement(sql_query, Statement.RETURN_GENERATED_KEYS);
 		}else{
 			stmt = connection.prepareStatement(sql_query);
 		}
 
-		Iterator<Method> it = types.iterator();
-		Method m;
 		Class<?> returnType;
 		int index = 1;
-		while (it.hasNext()) {
-			m = it.next();
+
+		for(Method m : types){
+
 			returnType = m.getReturnType();
 
-			if(returnType.equals(int.class)){
+			if(returnType.equals(int.class) || returnType.equals(Integer.class)){
 				stmt.setInt(index, (int) m.invoke(t));
 			}
 			else if(returnType.equals(String.class)){
@@ -187,11 +177,15 @@ public class PersistentContext<T>  {
 			else if(returnType.equals(BigDecimal.class)){
 				stmt.setBigDecimal(index, (BigDecimal) m.invoke(t));
 			}
-			else if(returnType.equals(long.class)){
+			else if(returnType.equals(long.class)  || returnType.equals(Long.class) ){
 				stmt.setLong(index, (long) m.invoke(t));
 			}
+			else if(returnType.equals(double.class) || returnType.equals(Double.class)){
+				stmt.setDouble(index, (double) m.invoke(t));
+			}
 			else{
-				stmt.setObject(index, m.invoke(t));
+				stmt.close();
+				throw new UnsupportedDataMappingException("The data type: " + returnType + " is not currently supported");
 			}
 			index++;
 		}
