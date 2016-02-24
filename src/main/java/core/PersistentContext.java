@@ -26,24 +26,25 @@ public class PersistentContext<T>  {
 
 	private DataSource dataSource;
 
-
 	public PersistentContext(DataSource datasource){
 		this.dataSource = datasource;
 	}
 
-
 	/**
 	 * 
 	 * @param t Generic object to persist
-	 * @throws NotValidPersistentClassException If the class is not annotated as PersistentClass.
-	 * @throws SQLException
+	 * @throws NotValidPersistentClassException If the class is not annotated as @PersistentClass or
+	 * if the T class doesn't have public getters for all the persistent fields.
+	 * @throws SQLException If an error occurs while accessing the Data Base.
+	 * @throws UnsupportedDataMappingException If one of the data type of the fields annotated with @ColumnMap is currently not supported on this application.
+	 * 
 	 */
 	public void insert(T t) throws NotValidPersistentClassException, SQLException, UnsupportedDataMappingException{
 
 		Class<?> c = t.getClass();
 
 		if(!c.isAnnotationPresent(PersistentClass.class)){
-			throw new NotValidPersistentClassException("The object must be an instance of a class annotated with @RgsPersistentCLass");
+			throw new NotValidPersistentClassException("The object must be an instance of a class annotated with @PersistentCLass");
 		}
 
 		Annotation annotation = c.getAnnotation(PersistentClass.class);
@@ -51,18 +52,12 @@ public class PersistentContext<T>  {
 		Field[] fields = c.getDeclaredFields();
 
 		PreparedStatement stmt = null;
-
 		try(Connection connection = this.dataSource.getConnection()){
-
 			stmt = generateInsertPrepareStatement(table.table(), fields, t, true, connection);
+
 			if(stmt != null)
 				stmt.executeUpdate();
-
-		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-			//TODO 
-			e.printStackTrace();
-		}
-
+		} 
 	}
 
 
@@ -70,14 +65,15 @@ public class PersistentContext<T>  {
 	 * 
 	 * @param t Generic object to persist
 	 * @return Auto-generated key created as a result of executing the insert on the Data Base. 0 if no key.
-	 * @throws NotValidPersistentClassException
-	 * @throws SQLException
+	 * @throws NotValidPersistentClassException If the class is not annotated as @PersistentClass or
+	 * if the T class doesn't have public getters for all the persistent fields.
+	 * @throws SQLException If an error occurs while accessing the Data Base.
+	 * @throws UnsupportedDataMappingException If one of the data type of the fields annotated with @ColumnMap is currently not supported on this application.
 	 */
 	public long insertAndReturnId(T t) throws NotValidPersistentClassException, SQLException, UnsupportedDataMappingException{
 
-		//TODO: Test behavior on missing auto generated key.
-
 		Class<? extends Object> c = t.getClass();
+
 		if(!c.isAnnotationPresent(PersistentClass.class)){
 			throw new NotValidPersistentClassException("The object must be an instance of a class annotated with @RgsPersistentCLass");
 		}
@@ -98,10 +94,6 @@ public class PersistentContext<T>  {
 				result = rs.getLong(1);
 				rs.close();
 			}	
-
-		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-			//TODO 
-			e.printStackTrace();
 		}
 
 		return result;
@@ -111,18 +103,15 @@ public class PersistentContext<T>  {
 	/*
 	 * Private aux method for generating the PreparedStatement object.
 	 */
-	private PreparedStatement generateInsertPrepareStatement(String tableName, Field[] fields, T t, boolean generatedKeyReturn, Connection connection) throws SQLException, 
-	IllegalAccessException, IllegalArgumentException, InvocationTargetException, UnsupportedDataMappingException{
+	private PreparedStatement generateInsertPrepareStatement(String tableName, Field[] fields, T t, boolean generatedKeyReturn, Connection connection)
+			throws SQLException, UnsupportedDataMappingException, NotValidPersistentClassException{
 
 		String sql_insert_front = "INSERT INTO " + tableName + " (";
 		String sql_values = ") VALUES (";
 		String sql_end = ")";
-
 		ColumnMap column;
 		String db_column_name;
 		Annotation annotation;
-
-
 		List<Method> types = new ArrayList<Method>();
 
 		for(int i = 0; i < fields.length; i++ ){
@@ -132,26 +121,26 @@ public class PersistentContext<T>  {
 				db_column_name = column.column();
 				sql_insert_front += db_column_name;
 				sql_values += "?";
+				PropertyDescriptor pd;
 
 				if(i < fields.length - 1){
 					sql_insert_front += ", ";
 					sql_values +=",";
-				}
-
-				PropertyDescriptor pd;
+				}		
 				try {
 					pd = new PropertyDescriptor(fields[i].getName(), t.getClass());
+
 					types.add(pd.getReadMethod());
-
 				} catch (IntrospectionException e) {
-					e.printStackTrace();
+					System.err.println("IntrospectionException on field: " + fields[i].getName());
+					throw new NotValidPersistentClassException("Classes annotated with @PersistentCLass must have a public getter for all the fields annotated with @ColumnMap.");
 				}
-
 			}
 		}
 
 		String sql_query = sql_insert_front + sql_values + sql_end;
 		PreparedStatement stmt = null;
+
 		if(generatedKeyReturn){
 			stmt = connection.prepareStatement(sql_query, Statement.RETURN_GENERATED_KEYS);
 		}else{
@@ -160,36 +149,55 @@ public class PersistentContext<T>  {
 
 		Class<?> returnType;
 		int index = 1;
+		String data_type = null;
 
-		for(Method m : types){
+		try{
+			for(Method m : types){
+				returnType = m.getReturnType();
 
-			returnType = m.getReturnType();
+				if(returnType.equals(int.class) || returnType.equals(Integer.class)){
+					data_type = "int";
+					
+					stmt.setInt(index, (int) m.invoke(t));
+				}
+				else if(returnType.equals(String.class)){
+					data_type = "String";
+					
+					stmt.setString(index, (String) m.invoke(t));
+				}
+				else if(returnType.equals(java.sql.Timestamp.class)){
+					data_type = "java.sql.Timestamp";
 
-			if(returnType.equals(int.class) || returnType.equals(Integer.class)){
-				stmt.setInt(index, (int) m.invoke(t));
+					stmt.setTimestamp(index, (java.sql.Timestamp) m.invoke(t));
+				}
+				else if(returnType.equals(BigDecimal.class)){
+					data_type = "BigDecimal";
+
+					stmt.setBigDecimal(index, (BigDecimal) m.invoke(t));
+				}
+				else if(returnType.equals(long.class)  || returnType.equals(Long.class) ){
+					data_type = "long";
+
+					stmt.setLong(index, (long) m.invoke(t));
+				}
+				else if(returnType.equals(double.class) || returnType.equals(Double.class)){
+					data_type = "double";
+
+					stmt.setDouble(index, (double) m.invoke(t));
+				}
+				else{
+					stmt.close();
+					throw new UnsupportedDataMappingException("The data type: " + returnType + " is not currently supported");
+				}
+				index++;
 			}
-			else if(returnType.equals(String.class)){
-				stmt.setString(index, (String) m.invoke(t));
-			}
-			else if(returnType.equals(java.sql.Timestamp.class)){
-				stmt.setTimestamp(index, (java.sql.Timestamp) m.invoke(t));
-			}
-			else if(returnType.equals(BigDecimal.class)){
-				stmt.setBigDecimal(index, (BigDecimal) m.invoke(t));
-			}
-			else if(returnType.equals(long.class)  || returnType.equals(Long.class) ){
-				stmt.setLong(index, (long) m.invoke(t));
-			}
-			else if(returnType.equals(double.class) || returnType.equals(Double.class)){
-				stmt.setDouble(index, (double) m.invoke(t));
-			}
-			else{
-				stmt.close();
-				throw new UnsupportedDataMappingException("The data type: " + returnType + " is not currently supported");
-			}
-			index++;
+		}catch (IllegalAccessException e){
+			System.err.println("IllegalAccessException while invoking a getter with return type: " + data_type);
+			throw new NotValidPersistentClassException("Classes annotated with @PersistentCLass must have a public getter for all the fields annotated with @ColumnMap.");
+		} catch (InvocationTargetException e) {
+			System.err.println("InvocationTargetException while invoking a getter with return type: " + data_type);
+			throw new NotValidPersistentClassException("The execution of a getter method in the Persistent Class has failed.");
 		}
-
 		return stmt;
 	}
 }
