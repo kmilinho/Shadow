@@ -1,2 +1,2 @@
-# Java-Persistor
-Basic Java Data Base Access Library
+# Shadow
+Basic Java ORM Library
