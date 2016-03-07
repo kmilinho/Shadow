@@ -3,6 +3,8 @@ package core;
 
 import javax.sql.DataSource;
 
+import exceptions.NotValidPersistentClassException;
+
 
 public class PersistentContextFactory{
 
@@ -12,7 +14,7 @@ public class PersistentContextFactory{
 		this.dataSource = ds;
 	}
 
-	public <T> PersistentContext<T> getGenericPersistentContextFor(Class<T> c){
-		return new PersistentContext<T>(this.dataSource);
+	public <T> PersistentContext<T> getPersistentContextFor(Class<T> c) throws NotValidPersistentClassException{
+		return new PersistentContext<T>(this.dataSource, c);
 	}
 }

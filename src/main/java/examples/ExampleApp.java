@@ -19,19 +19,29 @@ public class ExampleApp {
 		 */
 		PersistentContextFactory persistor_factory = new PersistentContextFactory(getDatSource());
 
-		PersistentContext<Dog> dog_persistor = persistor_factory.getGenericPersistentContextFor(Dog.class);	
+		PersistentContext<Dog> dog_persistor = null;
+		try {
+			dog_persistor = persistor_factory.getPersistentContextFor(Dog.class);
+		} catch (NotValidPersistentClassException e1) {
+			e1.printStackTrace();
+		}	
 
 		Dog dog = new Dog("Otto", 5);
 
 		long id;
+
 		try {
+		
 			id = dog_persistor.insertAndReturnId(dog);
+		
 			System.out.println("Otto was created, DB id is: " + id);
 			System.out.println(dog.bark());
-			
-		} catch (NotValidPersistentClassException | SQLException e) {
+
+		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+
+
 	}
 
 	public static DataSource getDatSource(){
