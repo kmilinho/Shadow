@@ -31,10 +31,10 @@ public class ExampleApp {
 		long id;
 
 		try {
-		
+			//insert entity
 			id = dog_persistor.insertAndReturnId(dog);
-		
-			System.out.println("Otto was created, DB id is: " + id);
+			//select entity
+			dog = dog_persistor.selectById(id);
 			System.out.println(dog.bark());
 
 		} catch (SQLException e) {
