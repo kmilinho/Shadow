@@ -1,4 +1,4 @@
-package persistor;
+package shadow.test;
 
 import org.junit.BeforeClass;
 import org.junit.Test;

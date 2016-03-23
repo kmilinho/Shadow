@@ -1,4 +1,4 @@
-package annotations;
+package shadow.annotations;
 
 
 import java.lang.annotation.Retention;

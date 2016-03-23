@@ -1,5 +1,5 @@
-package core;
+package shadow.core;
 
 public class Filter {
-
+	
 }

@@ -1,9 +1,9 @@
-package core;
+package shadow.core;
 
 
 import javax.sql.DataSource;
 
-import exceptions.NotValidPersistentClassException;
+import shadow.exceptions.NotValidPersistentClassException;
 
 
 public class PersistentContextFactory{

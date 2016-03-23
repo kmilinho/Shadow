@@ -1,4 +1,4 @@
-package exceptions;
+package shadow.exceptions;
 
 
 public class NotValidPersistentClassException extends Exception {

@@ -1,8 +1,8 @@
-package examples;
+package shadow.examples;
 
-import annotations.ColumnMap;
-import annotations.ID;
-import annotations.PersistentClass;
+import shadow.annotations.ColumnMap;
+import shadow.annotations.ID;
+import shadow.annotations.PersistentClass;
 
 @PersistentClass(table = "dog_table")
 public class Dog {
@@ -12,10 +12,10 @@ public class Dog {
 	private long id;
 
 	@ColumnMap(column = "column_name")
-	private String name;
+	public String name;
 
 	@ColumnMap(column = "column_age")
-	private int age;
+	public int age;
 	
 	public Dog(){
 		
@@ -28,5 +28,10 @@ public class Dog {
 
 	public String bark(){
 		return "My name is " + this.name + " and I'm " + this.age + " years old, woof."; 
+	}
+	
+	public static void print_a_dog(Dog dog){
+		System.out.println("Dog Name: " + dog.name + " Dog Age: " + dog.age); 
+		
 	}
 }
