@@ -1,2 +1,2 @@
 # Shadow
-Basic Java ORM Library
+Java ORM Library
