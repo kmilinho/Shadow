@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
+//TODO: java generic (Filter<T>)?
 public class Filter {
 	
 	private String txt;

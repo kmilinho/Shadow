@@ -222,9 +222,40 @@ public class PersistentContext<T>  {
 		return result;
 	}
 
-	//TODO
-	public List<T> select(Filter filter){
+	/**
+	 *  
+	 * @param filter Boolean expression used as a condition to select the records from the DB.
+	 * @return list of T object retrieved from the DB.
+	 * @throws SQLException
+	 */
+	public List<T> select(Filter filter)
+			throws SQLException{
+		
+		String SQL_SELECT = "SELECT * FROM " + this._table + " WHERE " + filter.getTxt();
 		List<T> result = new ArrayList<T>();
+		Connection connection = this.dataSource.getConnection();
+		PreparedStatement stmt = null;
+		stmt = connection.prepareStatement(SQL_SELECT);
+		List<Object> filter_values = filter.getValues();
+		int pos = 1;
+		for(Object ob : filter_values){
+			if(ob instanceof Integer){
+				stmt.setInt(pos, (int) ob);
+			}
+			else if(ob instanceof String){
+				stmt.setString(pos, (String) ob);
+			}
+			pos++;
+		}
+		
+		System.out.println("EXECUTING QUERY: " + stmt.toString());
+		ResultSet rs = stmt.executeQuery();
+		while (rs.next()) {	
+			result.add(createInstance(rs));
+		}
+		rs.close();
+		stmt.close();
+		connection.close();
 		return result;
 	}
 
@@ -263,7 +294,23 @@ public class PersistentContext<T>  {
 	public void delete(Filter filter){
 
 	}
-
+	
+	/**
+	 * Erase all the T records from the associated table on the DB.
+	 * @throws SQLException
+	 */
+	public void deleteAll()
+			throws SQLException{
+		String SQL_SELECT_ALL = "DELETE FROM " + this._table;
+		Connection connection = this.dataSource.getConnection();
+		PreparedStatement stmt = null;
+		stmt = connection.prepareStatement(SQL_SELECT_ALL);
+		System.out.println("EXECUTING QUERY: " + stmt.toString());
+		stmt.executeUpdate();
+		stmt.close();
+		connection.close();
+	}
+	
 
 	private List<T> _selectAll() 
 			throws SQLException{
